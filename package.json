@@ -1,0 +1,13 @@
+{
+  "name": "mycelium",
+  "private": true,
+  "description": "Git hooks and commit linting for mycelium",
+  "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "lefthook": "^1.11.0"
+  },
+  "scripts": {
+    "prepare": "lefthook install"
+  }
+}

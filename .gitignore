@@ -1,0 +1,25 @@
+# Binaries
+/bin/
+/mycelium
+*.exe
+
+# Test artifacts
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+/vendor/
+/node_modules/
+
+# Build
+*.o
+*.a
