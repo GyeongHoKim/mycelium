@@ -8,26 +8,28 @@ Mycelium is an open-source daemon that watches your local markdown vault, finds 
 
 ## How It Works
 
-```
-Your Vault (.md files)
-        │
-        ▼
-  Mycelium Daemon  ──→  Ollama (local embeddings)
-        │
-        ▼
-    SQLite DB  (embeddings + similarity scores)
-        │
-        ▼
-  Plugin (Obsidian / Logseq / Foam)
-        │
-        ▼
-  Auto-updated Related section in your notes
+```mermaid
+flowchart TB
+  Vault["Your Vault (.md files)"]
+  Daemon["Mycelium Daemon"]
+  Ollama["Ollama (local embeddings)"]
+  VectorDB["Vector DB<br/>(embedding vectors, similarity search)"]
+  SQLite["SQLite DB<br/>(note metadata, paths, timestamps)"]
+  Plugin["Plugin (Obsidian / Logseq / Foam)"]
+  Related["Auto-updated Related section in your notes"]
+
+  Vault --> Daemon
+  Daemon --> Ollama
+  Daemon --> VectorDB
+  Daemon --> SQLite
+  Daemon --> Plugin
+  Plugin --> Related
 ```
 
-1. Mycelium watches your vault folder for changes
-2. When a note is created or updated, it generates an embedding via a local Ollama model
-3. Cosine similarity is computed against all other notes in the vault
-4. The plugin writes the top-K related notes back into each file — either as frontmatter or as a `## Related` section at the bottom
+1. The **daemon** watches your vault folder for changes.
+2. When a note is created or updated, the daemon generates an embedding (Ollama), stores it in the vector DB, and keeps note metadata in SQLite.
+3. Similarity is computed via the vector DB (e.g. approximate nearest neighbor). The daemon exposes “related notes” over IPC.
+4. The **plugin** (running inside your editor) asks the daemon for related notes and writes the top-K results into each file — as frontmatter or a `## Related` section, depending on editor and config.
 
 Everything runs on your device. No cloud. No API keys.
 
@@ -36,9 +38,9 @@ Everything runs on your device. No cloud. No API keys.
 ## Features
 
 - **Multilingual** — Supports Korean, English, Japanese, Chinese, and 100+ languages out of the box via `multilingual-e5-small`
-- **Local-first** — Embeddings and similarity data stay on your machine
-- **Automatic** — Watches for file changes and updates related notes incrementally
-- **Non-destructive** — Manual links you write yourself are never overwritten
+- **Local-first** — Embeddings (vector DB) and note metadata (SQLite) stay on your machine
+- **Automatic** — Watches for file changes and updates related notes incrementally (changed note is re-embedded and its Related list refreshed; the plugin can refresh other notes when they are opened or on a sync).
+- **Non-destructive** — Only the content between `<!-- mycelium:start -->` and `<!-- mycelium:end -->` is updated; the rest of the note (including your own links elsewhere) is left unchanged.
 - **Plugin architecture** — Core logic is editor-agnostic; thin plugins handle each tool's format
 
 ---
@@ -71,7 +73,7 @@ ollama pull multilingual-e5-small
 1. Open Settings → Community Plugins → Browse
 2. Search for `Mycelium`
 3. Install and enable
-4. The plugin will automatically download and start the Mycelium daemon on first run
+4. The plugin will automatically download and start the Mycelium daemon on first run (typically installs the daemon under `~/.mycelium/` or the plugin directory and uses config from `~/.mycelium/config.toml`).
 
 Or install manually by copying `plugins/obsidian` into your vault's `.obsidian/plugins/` folder.
 
@@ -83,8 +85,8 @@ If you prefer to manage the daemon yourself:
 # macOS / Linux
 brew install mycelium        # coming soon
 
-# or build from source:
-git clone https://github.com/your-handle/mycelium
+# or build from source (replace with the actual repo URL when published):
+git clone https://github.com/<org>/mycelium
 cd mycelium
 go build -o mycelium ./cmd/mycelium
 ```
@@ -93,7 +95,7 @@ go build -o mycelium ./cmd/mycelium
 
 ## Output Format
 
-Mycelium adds a managed section at the bottom of each note. It only touches content between the markers — everything else in your note is untouched.
+The **plugin** adds a managed section at the bottom of each note (or in frontmatter for editors like Logseq). It only replaces content between the markers — everything else in your note is untouched.
 
 ```markdown
 # My Note on HLS Streaming
@@ -116,7 +118,7 @@ The `<!-- mycelium:start -->` / `<!-- mycelium:end -->` markers tell the plugin 
 
 ## Configuration
 
-Configuration lives in `~/.mycelium/config.toml`:
+Configuration lives in `~/.mycelium/config.toml` (one vault path per config; one daemon instance typically serves that vault, and multiple plugins can connect to the same daemon):
 
 ```toml
 [vault]
@@ -131,44 +133,55 @@ top_k     = 5        # how many related notes to show per file
 threshold = 0.75     # minimum similarity score (0.0 ~ 1.0)
 
 [output]
-format = "section"   # "section" | "frontmatter"
+format = "section"   # "section" | "frontmatter" (default per editor: Obsidian → section, Logseq → frontmatter)
 ```
 
 ---
 
 ## Architecture
 
-```
-mycelium/
-├── cmd/
-│   └── mycelium/            # daemon entry point
-│
-├── internal/                # private Go packages
-│   ├── indexer/             # vault scan, file watcher (fsnotify)
-│   ├── embedder/            # Ollama API client
-│   ├── similarity/          # cosine similarity, ranking
-│   ├── db/                  # SQLite (notes + similarity cache)
-│   └── ipc/                 # UDS (macOS/Linux) / Named Pipe (Windows)
-│
-├── plugins/
-│   ├── obsidian/            # TypeScript
-│   ├── logseq/              # TypeScript (planned)
-│   └── foam/                # TypeScript (planned)
-│
-├── scripts/                 # build & release scripts
-└── .github/workflows/       # CI/CD
+The repo layout below is the target design. The `vectordb/` package (vector store for embeddings and ANN search) is planned; until then, similarity may be implemented with an in-memory or external vector store.
+
+```mermaid
+flowchart TB
+  subgraph mycelium["mycelium/"]
+    subgraph cmd["cmd/"]
+      main["mycelium/ (daemon entry point)"]
+    end
+    subgraph internal["internal/ (private Go packages)"]
+      indexer["indexer/ (vault scan, fsnotify)"]
+      embedder["embedder/ (Ollama API)"]
+      similarity["similarity/ (backed by vector DB)"]
+      db["db/ (SQLite, note metadata)"]
+      vectordb["vectordb/ (embeddings, ANN) — planned"]
+      ipc["ipc/ (UDS / Named Pipe)"]
+    end
+    subgraph plugins["plugins/"]
+      obsidian["obsidian/ (TypeScript)"]
+      logseq["logseq/ (planned)"]
+      foam["foam/ (planned)"]
+    end
+    scripts["scripts/"]
+    workflows[".github/workflows/"]
+  end
 ```
 
 ### IPC
 
 The daemon and plugin communicate over a Unix Domain Socket (macOS/Linux) or Named Pipe (Windows) — no network stack, no port conflicts.
 
-```
-Plugin (Node.js / TypeScript)
-    └─ IPC connection
-           └─ Mycelium Daemon (Go)
-                  ├─ SQLite
-                  └─ Ollama
+```mermaid
+flowchart TB
+  Plugin["Plugin (Node.js / TypeScript)"]
+  Daemon["Mycelium Daemon (Go)"]
+  SQLite["SQLite (note metadata)"]
+  VectorDB["Vector DB (embeddings)"]
+  Ollama["Ollama"]
+
+  Plugin -->|"IPC connection"| Daemon
+  Daemon --> SQLite
+  Daemon --> VectorDB
+  Daemon --> Ollama
 ```
 
 ### Scorer interface
@@ -190,7 +203,7 @@ Current implementation uses multilingual embeddings + cosine similarity. A BM25-
 
 - All processing happens locally on your machine
 - Notes are never sent to any external server
-- Embeddings are stored in a local SQLite database at `~/.mycelium/index.db`
+- Note metadata is stored in SQLite at `~/.mycelium/index.db`; embedding vectors are stored in a local vector DB (e.g. under `~/.mycelium/`)
 - Ollama runs entirely offline after the initial model download
 
 ---
