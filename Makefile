@@ -34,8 +34,7 @@ lint:
 
 # Format code
 fmt:
-	goimports -w .
-	golines -w .
+	golangci-lint fmt
 
 # Clean build artifacts
 clean:

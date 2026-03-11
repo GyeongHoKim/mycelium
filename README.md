@@ -27,9 +27,9 @@ flowchart TB
 ```
 
 1. The **daemon** watches your vault folder for changes.
-2. When a note is created or updated, the daemon generates an embedding (Ollama), stores it in the vector DB, and keeps note metadata in SQLite.
-3. Similarity is computed via the vector DB (e.g. approximate nearest neighbor). The daemon exposes “related notes” over IPC.
-4. The **plugin** (running inside your editor) asks the daemon for related notes and writes the top-K results into each file — as frontmatter or a `## Related` section, depending on editor and config.
+2. When a note is created or updated, the daemon generates an embedding (Ollama), stores it in the **embedded vector DB (chromem-go)**, and keeps note metadata (including content hashes) in SQLite.
+3. Similarity is computed via the vector DB. The daemon exposes "related notes" over IPC.
+4. The **plugin** (running inside your editor) requests related notes from the daemon and writes them into the file using the editor's internal API. This ensures **"Plugin-as-Writer"** safety, avoiding file system conflicts and preserving undo history.
 
 Everything runs on your device. No cloud. No API keys.
 
@@ -38,9 +38,10 @@ Everything runs on your device. No cloud. No API keys.
 ## Features
 
 - **Multilingual** — Supports Korean, English, Japanese, Chinese, and 100+ languages out of the box via `multilingual-e5-small`
-- **Local-first** — Embeddings (vector DB) and note metadata (SQLite) stay on your machine
-- **Automatic** — Watches for file changes and updates related notes incrementally (changed note is re-embedded and its Related list refreshed; the plugin can refresh other notes when they are opened or on a sync).
-- **Non-destructive** — Only the content between `<!-- mycelium:start -->` and `<!-- mycelium:end -->` is updated; the rest of the note (including your own links elsewhere) is left unchanged.
+- **Local-first** — Embeddings (via `chromem-go`) and note metadata (SQLite) stay on your machine
+- **Intelligent Updates** — Uses a combination of **Debouncing** (waits for typing to stop) and **Content Hashing** (ignores changes within the `## Related` section) to minimize Ollama API calls and prevent update loops.
+- **Plugin-as-Writer** — The daemon never modifies your files directly. The plugin handles all writes via editor APIs, ensuring safety and compatibility with editor features like Undo.
+- **Non-destructive** — Only the content between `<!-- mycelium:start -->` and `<!-- mycelium:end -->` is updated; the rest of the note is left untouched.
 - **Plugin architecture** — Core logic is editor-agnostic; thin plugins handle each tool's format
 
 ---
@@ -211,7 +212,11 @@ Current implementation uses multilingual embeddings + cosine similarity. A BM25-
 ## Roadmap
 
 - [x] Core daemon (Go)
-- [x] Obsidian plugin
+- [ ] SQLite schema with content hashing
+- [ ] `chromem-go` integration (Vector DB)
+- [ ] Intelligent update logic (Debounce + Hashing)
+- [ ] IPC protocol for "Plugin-as-Writer" (fetch-only mode)
+- [ ] Obsidian plugin (v2 with IPC fetch)
 - [ ] Logseq plugin
 - [ ] Foam plugin
 - [ ] BM25 scorer (offline fallback, no Ollama required)
