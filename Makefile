@@ -23,10 +23,12 @@ run: build
 test:
 	go test -v -race ./...
 
-# Run tests with coverage
-test-cover:
-	go test -v -race -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
+# Run tests with coverage (coverage.txt + HTML report in report/)
+test-coverage:
+	@mkdir -p report
+	go test -v -race -coverprofile=coverage.txt ./...
+	go tool cover -html=coverage.txt -o report/coverage.html
+	@echo "Coverage report: report/coverage.html"
 
 # Run linter
 lint:
@@ -38,8 +40,8 @@ fmt:
 
 # Clean build artifacts
 clean:
-	rm -rf $(BUILD_DIR)
-	rm -f coverage.out coverage.html
+	rm -rf $(BUILD_DIR) report
+	rm -f coverage.txt
 
 # Cross-compile for all platforms
 release:
@@ -73,7 +75,7 @@ help:
 	@echo "  build      - Build the daemon binary"
 	@echo "  run        - Build and run the daemon"
 	@echo "  test       - Run tests"
-	@echo "  test-cover - Run tests with coverage report"
+	@echo "  test-coverage - Run tests with coverage (coverage.txt, report/coverage.html)"
 	@echo "  lint       - Run golangci-lint"
 	@echo "  fmt        - Format code with goimports and golines"
 	@echo "  clean      - Remove build artifacts"
