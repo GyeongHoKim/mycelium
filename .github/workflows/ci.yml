@@ -11,15 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/go/pkg/mod
@@ -35,7 +35,7 @@ jobs:
         run: go test -v -race -count=1 -coverprofile=coverage.txt ./...
 
       - name: Archive code coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: code-coverage
           path: coverage.txt
@@ -51,7 +51,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Post coverage report
-        uses: fgrosse/go-coverage-report@v1
+        uses: fgrosse/go-coverage-report@v1.2.0
         with:
           coverage-artifact-name: code-coverage
           coverage-file-name: coverage.txt
@@ -60,15 +60,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
-          config: .golangci.yml
+          version: v2.0.0
+          args: --config=.golangci.yml
