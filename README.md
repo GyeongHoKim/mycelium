@@ -1,5 +1,7 @@
 # 🍄 Mycelium
 
+[![codecov](https://codecov.io/gh/GyeongHoKim/mycelium/branch/main/graph/badge.svg)](https://codecov.io/gh/GyeongHoKim/mycelium)
+
 > Automatically discover and link related notes across your knowledge base — powered by multilingual embeddings, running entirely on your device.
 
 Mycelium is an open-source daemon that watches your local markdown vault, finds semantically related notes, and writes those connections back into your files automatically. Just like the underground fungal network that silently connects trees in a forest, Mycelium works quietly in the background to surface the hidden structure of your knowledge.
