@@ -1,0 +1,29 @@
+{
+  "name": "mycelium (Go)",
+  "image": "mcr.microsoft.com/devcontainers/go:latest",
+  "features": {
+    "ghcr.io/georgofenbeck/features/lazygit-linuxbinary:1": {},
+    "ghcr.io/devcontainers/features/node:1": {},
+    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.Go"
+      ],
+      "settings": {
+        "go.lintTool": "golangci-lint",
+        "go.lintFlags": ["--path-mode=abs", "--fast-only"],
+        "go.formatTool": "custom",
+        "go.alternateTools": {
+          "customFormatter": "golangci-lint"
+        },
+        "go.formatFlags": ["fmt", "--stdin"],
+        "go.lintOnSave": "workspace",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+  "postCreateCommand": "make setup",
+  "remoteUser": "vscode"
+}
