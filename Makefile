@@ -1,4 +1,4 @@
-.PHONY: build run test lint fmt clean all release setup
+.PHONY: build run test lint fmt clean all release setup deps mod-tidy-check tools
 
 BINARY_NAME := mycelium
 BUILD_DIR := ./bin
@@ -57,6 +57,10 @@ deps:
 	go mod download
 	go mod tidy
 
+# Verify go.mod/go.sum are tidy (for pre-commit)
+mod-tidy-check:
+	go mod tidy && git diff --exit-code go.mod go.sum
+
 # Install dev tools
 tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
@@ -81,5 +85,6 @@ help:
 	@echo "  clean      - Remove build artifacts"
 	@echo "  release    - Cross-compile for all platforms"
 	@echo "  deps       - Download and tidy dependencies"
+	@echo "  mod-tidy-check - Verify go.mod/go.sum are tidy"
 	@echo "  tools      - Install development tools"
 	@echo "  setup      - Setup development environment (tools + git hooks)"

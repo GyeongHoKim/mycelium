@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/gyeonghokim/mycelium/internal/config"
+
 	"github.com/stretchr/testify/assert"
 )
 

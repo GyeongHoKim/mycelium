@@ -1,18 +1,18 @@
 # https://github.com/evilmartians/lefthook
+# Order matters: format first (may change files), then lint, then mod-tidy-check.
 
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
     format:
       glob: "*.go"
-      run: goimports -w {staged_files} && golines -w {staged_files}
+      run: make fmt
       stage_fixed: true
     lint:
       glob: "*.go"
-      run: golangci-lint run --fix {staged_files}
-      stage_fixed: true
-    mod-tidy:
-      run: go mod tidy && git diff --exit-code go.mod go.sum
+      run: make lint
+    mod-tidy-check:
+      run: make mod-tidy-check
 
 commit-msg:
   commands:
