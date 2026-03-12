@@ -1,4 +1,4 @@
-.PHONY: build run test lint fmt clean all release setup
+.PHONY: build run test lint fmt clean all release setup deps mod-tidy-check tools
 
 BINARY_NAME := mycelium
 BUILD_DIR := ./bin
@@ -23,10 +23,12 @@ run: build
 test:
 	go test -v -race ./...
 
-# Run tests with coverage
-test-cover:
-	go test -v -race -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
+# Run tests with coverage (coverage.txt + HTML report in report/)
+test-coverage:
+	@mkdir -p report
+	go test -v -race -coverprofile=coverage.txt ./...
+	go tool cover -html=coverage.txt -o report/coverage.html
+	@echo "Coverage report: report/coverage.html"
 
 # Run linter
 lint:
@@ -34,13 +36,12 @@ lint:
 
 # Format code
 fmt:
-	goimports -w .
-	golines -w .
+	golangci-lint fmt
 
 # Clean build artifacts
 clean:
-	rm -rf $(BUILD_DIR)
-	rm -f coverage.out coverage.html
+	rm -rf $(BUILD_DIR) report
+	rm -f coverage.txt
 
 # Cross-compile for all platforms
 release:
@@ -55,6 +56,10 @@ release:
 deps:
 	go mod download
 	go mod tidy
+
+# Verify go.mod/go.sum are tidy (for pre-commit)
+mod-tidy-check:
+	go mod tidy && git diff --exit-code go.mod go.sum
 
 # Install dev tools
 tools:
@@ -74,11 +79,12 @@ help:
 	@echo "  build      - Build the daemon binary"
 	@echo "  run        - Build and run the daemon"
 	@echo "  test       - Run tests"
-	@echo "  test-cover - Run tests with coverage report"
+	@echo "  test-coverage - Run tests with coverage (coverage.txt, report/coverage.html)"
 	@echo "  lint       - Run golangci-lint"
 	@echo "  fmt        - Format code with goimports and golines"
 	@echo "  clean      - Remove build artifacts"
 	@echo "  release    - Cross-compile for all platforms"
 	@echo "  deps       - Download and tidy dependencies"
+	@echo "  mod-tidy-check - Verify go.mod/go.sum are tidy"
 	@echo "  tools      - Install development tools"
 	@echo "  setup      - Setup development environment (tools + git hooks)"

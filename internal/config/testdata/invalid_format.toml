@@ -1,0 +1,13 @@
+[vault]
+path = "/path/to/vault"
+
+[embedding]
+model = "nomic-embed-text"
+ollama = "http://localhost:11434"
+
+[similarity]
+top_k = 5
+threshold = 0.7
+
+[output]
+format = "invalid"

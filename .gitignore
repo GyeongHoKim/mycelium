@@ -3,9 +3,9 @@
 /mycelium
 *.exe
 
-# Test artifacts
-coverage.out
-coverage.html
+# Test coverage
+coverage.txt
+report/
 
 # IDE
 .idea/
