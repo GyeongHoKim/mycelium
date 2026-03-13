@@ -1,0 +1,76 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: mycelium
+    main: ./cmd/mycelium
+    binary: mycelium
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: mycelium
+    # Raw binary (no tarball) — matches README naming: mycelium_{version}_{os}_{arch}[.exe]
+    format: binary
+    name_template: "mycelium_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: GyeongHoKim
+    name: mycelium
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Installation
+
+    See the [README](https://github.com/GyeongHoKim/mycelium#installation) for full installation instructions.
+
+    **Verify checksum (macOS/Linux)**
+    ```bash
+    sha256sum --check --ignore-missing checksums.txt
+    ```
+    On macOS use `shasum -a 256 --check checksums.txt` instead.
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: "New Features"
+      regexp: "^feat"
+      order: 0
+    - title: "Bug Fixes"
+      regexp: "^fix"
+      order: 1
+    - title: "Performance"
+      regexp: "^perf"
+      order: 2
+    - title: "Other"
+      order: 999
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^chore"
+      - "^ci"
+      - "^refactor"
+      - Merge pull request
+      - Merge branch
