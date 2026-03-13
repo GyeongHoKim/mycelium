@@ -39,7 +39,7 @@ Everything runs on your device. No cloud. No API keys.
 
 ## Features
 
-- **Multilingual** — Supports Korean, English, Japanese, Chinese, and 100+ languages out of the box via `multilingual-e5-small`
+- **Multilingual** — Supports Korean, English, Japanese, Chinese, and 100+ languages out of the box via `qwen3-embedding`
 - **Local-first** — Embeddings (via `chromem-go`) and note metadata (SQLite) stay on your machine
 - **Intelligent Updates** — Uses a combination of **Debouncing** (waits for typing to stop) and **Content Hashing** (ignores changes within the `## Related` section) to minimize Ollama API calls and prevent update loops.
 - **Plugin-as-Writer** — The daemon never modifies your files directly. The plugin handles all writes via editor APIs, ensuring safety and compatibility with editor features like Undo.
@@ -61,10 +61,10 @@ Everything runs on your device. No cloud. No API keys.
 ## Requirements
 
 - [Ollama](https://ollama.com) — for local embedding generation
-- Ollama model: `multilingual-e5-small` (~270MB)
+- Ollama model: `qwen3-embedding` (~270MB)
 
 ```bash
-ollama pull multilingual-e5-small
+ollama pull qwen3-embedding
 ```
 
 ---
@@ -128,7 +128,7 @@ Configuration lives in `~/.mycelium/config.toml` (one vault path per config; one
 path = "/Users/you/Documents/vault"
 
 [embedding]
-model   = "multilingual-e5-small"
+model   = "qwen3-embedding"
 ollama  = "http://localhost:11434"
 
 [similarity]
