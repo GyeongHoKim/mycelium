@@ -134,6 +134,10 @@ func (o *OllamaEmbedder) Embed(ctx context.Context, text string) (Embedding, err
 		return nil, err
 	}
 
+	if len(result.Embeddings) == 0 {
+		return nil, ErrEmptyResponse
+	}
+
 	return result.Embeddings[0], nil
 }
 

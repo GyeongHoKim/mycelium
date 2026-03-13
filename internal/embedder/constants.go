@@ -10,6 +10,7 @@ var (
 	ErrServerUnexpected = errors.New("ollama server does not response as expected")
 	ErrModelNotFound    = errors.New("model not found")
 	ErrInvalidURL       = errors.New("invalid url")
+	ErrEmptyResponse    = errors.New("empty response from embedder")
 )
 
 const (
