@@ -4,11 +4,10 @@ package db
 import (
 	"context"
 	"database/sql"
-	"strings"
 
 	_ "embed"
 
-	_ "github.com/mattn/go-sqlite3" // Register sqlite3 driver
+	_ "modernc.org/sqlite" // Pure Go SQLite driver (no cgo)
 
 	"github.com/gyeonghokim/mycelium/internal/db/models"
 )
@@ -22,13 +21,7 @@ type DB struct {
 
 func Open(path string) (*DB, error) {
 	// 주의: 이때 DB 연결 안함 sql.Open은 추상화를 위한 준비만 하고 실제 연결은 Ping으로 확인.
-	dsn := path
-	if strings.Contains(path, "?") {
-		dsn += "&_loc=UTC"
-	} else {
-		dsn += "?_loc=UTC"
-	}
-	db, err := sql.Open("sqlite3", dsn)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}
