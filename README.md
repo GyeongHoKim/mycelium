@@ -43,6 +43,7 @@ Everything runs on your device. No cloud. No API keys.
 - **Local-first** — Embeddings (via `chromem-go`) and note metadata (SQLite) stay on your machine
 - **Intelligent Updates** — Uses a combination of **Debouncing** (waits for typing to stop) and **Content Hashing** (ignores changes within the `## Related` section) to minimize Ollama API calls and prevent update loops.
 - **Plugin-as-Writer** — The daemon never modifies your files directly. The plugin handles all writes via editor APIs, ensuring safety and compatibility with editor features like Undo.
+- **Single-instance daemon** — Uses a PID file and socket handshake to guarantee only one daemon process runs per vault. A second invocation connects to the existing instance instead of spawning a duplicate.
 - **Non-destructive** — Only the content between `<!-- mycelium:start -->` and `<!-- mycelium:end -->` is updated; the rest of the note is left untouched.
 - **Plugin architecture** — Core logic is editor-agnostic; thin plugins handle each tool's format
 
@@ -50,11 +51,18 @@ Everything runs on your device. No cloud. No API keys.
 
 ## Supported Editors
 
-| Editor        | Status       | Related Notes Format                  |
-| ------------- | ------------ | ------------------------------------- |
-| Obsidian      | ✅ Available | `## Related` section (bottom of note) |
-| Logseq        | 🚧 Planned   | `related::` frontmatter property      |
-| Foam (VSCode) | 🚧 Planned   | `## Related` section (bottom of note) |
+| Editor        | Status       | Related Notes Format                  | Installation constraint          |
+| ------------- | ------------ | ------------------------------------- | -------------------------------- |
+| Obsidian      | ✅ Available | `## Related` section (bottom of note) | Native installer only (see note) |
+| Logseq        | 🚧 Planned   | `related::` frontmatter property      | —                                |
+| Foam (VSCode) | 🚧 Planned   | `## Related` section (bottom of note) | —                                |
+
+> **Obsidian sandbox note.** The Obsidian community plugin store only allows `manifest.json`,
+> `styles.css`, and `main.js` in each release — binaries cannot be bundled. Additionally,
+> sandboxed Obsidian distributions (Snap, Flatpak, AppImage) block child-process execution.
+> The plugin can only download and launch the Mycelium daemon when Obsidian is installed via
+> the **native desktop installer** (`.dmg`, `.exe`, `apt` repo). Users must also disable
+> **Restricted Mode** in Obsidian settings before enabling the plugin.
 
 ---
 
@@ -69,30 +77,76 @@ ollama pull qwen3-embedding
 
 ---
 
+## Platform Support
+
+| OS      | Architecture     | IPC transport                      | Binary name                            |
+| ------- | ---------------- | ---------------------------------- | -------------------------------------- |
+| macOS   | amd64            | Unix Domain Socket                 | `mycelium_{version}_darwin_amd64`      |
+| macOS   | arm64 (M-series) | Unix Domain Socket                 | `mycelium_{version}_darwin_arm64`      |
+| Linux   | amd64            | Unix Domain Socket                 | `mycelium_{version}_linux_amd64`       |
+| Linux   | arm64            | Unix Domain Socket                 | `mycelium_{version}_linux_arm64`       |
+| Windows | amd64            | Named Pipe (`\\.\pipe\mycelium`)   | `mycelium_{version}_windows_amd64.exe` |
+
+**Platform detection in the plugin (Node.js/TypeScript):**
+
+```typescript
+function resolveBinaryName(version: string): string {
+  const osMap:   Record<string, string> = { darwin: "darwin", linux: "linux", win32: "windows" };
+  const archMap: Record<string, string> = { x64: "amd64", arm64: "arm64" };
+  const ext = process.platform === "win32" ? ".exe" : "";
+  return `mycelium_${version}_${osMap[process.platform]}_${archMap[process.arch]}${ext}`;
+}
+```
+
+> **WSL note.** `process.platform` reports `"linux"` inside WSL — use the Linux binary and
+> Unix Domain Socket. Named Pipes are only used on native Windows.
+
+---
+
 ## Installation
 
-**Obsidian**
+### Via Obsidian Plugin (recommended)
 
-1. Open Settings → Community Plugins → Browse
-2. Search for `Mycelium`
-3. Install and enable
-4. The plugin will automatically download and start the Mycelium daemon on first run (typically installs the daemon under `~/.mycelium/` or the plugin directory and uses config from `~/.mycelium/config.toml`).
+> **Prerequisite:** Obsidian must be installed via the **native desktop installer**
+> (`.dmg`, `.exe`, `apt` repo). Sandboxed distributions (Snap, Flatpak, AppImage) block
+> child-process execution. See [Platform Support](#platform-support).
 
-Or install manually by copying `plugins/obsidian` into your vault's `.obsidian/plugins/` folder.
+1. Open Settings → Community Plugins → turn off **Restricted Mode**.
+2. Browse → search `Mycelium` → Install → Enable.
+3. On first activation the plugin:
+   - Detects OS and architecture
+   - Downloads `checksums.txt` from the matching GitHub release
+   - Downloads `mycelium_{version}_{os}_{arch}[.exe]`
+   - **Verifies SHA-256 checksum** against `checksums.txt` — refuses to run on mismatch
+   - Places binary at `~/.mycelium/mycelium` (or `%APPDATA%\mycelium\mycelium.exe`)
+   - Starts the daemon (see [Daemon Lifecycle](#daemon-lifecycle))
 
-**Manual daemon installation (advanced)**
-
-If you prefer to manage the daemon yourself:
+### Manual Installation
 
 ```bash
-# macOS / Linux
-brew install mycelium        # coming soon
+VERSION="0.1.0"
+OS="darwin"      # darwin | linux | windows
+ARCH="arm64"     # amd64 | arm64
 
-# or build from source (replace with the actual repo URL when published):
-git clone https://github.com/<org>/mycelium
+curl -LO "https://github.com/GyeongHoKim/mycelium/releases/download/v${VERSION}/checksums.txt"
+curl -LO "https://github.com/GyeongHoKim/mycelium/releases/download/v${VERSION}/mycelium_${VERSION}_${OS}_${ARCH}"
+
+# Verify (macOS/Linux)
+sha256sum --check --ignore-missing checksums.txt
+
+chmod +x mycelium_${VERSION}_${OS}_${ARCH}
+mv mycelium_${VERSION}_${OS}_${ARCH} /usr/local/bin/mycelium
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/GyeongHoKim/mycelium
 cd mycelium
 go build -o mycelium ./cmd/mycelium
 ```
+
+No cgo required — SQLite driver (`modernc.org/sqlite`) is pure Go.
 
 ---
 
@@ -171,20 +225,40 @@ flowchart TB
 
 ### IPC
 
-The daemon and plugin communicate over a Unix Domain Socket (macOS/Linux) or Named Pipe (Windows) — no network stack, no port conflicts.
+The daemon and plugin communicate over a **Unix Domain Socket** at `~/.mycelium/mycelium.sock`
+(macOS/Linux) or a **Named Pipe** (`\\.\pipe\mycelium`) on Windows. The protocol is
+**JSON-RPC 2.0** — the same framing as LSP and MCP — so any language with a JSON library
+can implement a client.
 
 ```mermaid
-flowchart TB
-  Plugin["Plugin (Node.js / TypeScript)"]
-  Daemon["Mycelium Daemon (Go)"]
-  SQLite["SQLite (note metadata)"]
-  VectorDB["Vector DB (embeddings)"]
+flowchart LR
+  Plugin["Plugin\n(Node.js / TypeScript)"]
+  Daemon["Mycelium Daemon\n(Go)"]
+  SQLite["SQLite\n(note metadata)"]
+  VectorDB["Vector DB\n(embeddings)"]
   Ollama["Ollama"]
 
-  Plugin -->|"IPC connection"| Daemon
+  Plugin -->|"JSON-RPC 2.0\nUDS / Named Pipe"| Daemon
   Daemon --> SQLite
   Daemon --> VectorDB
   Daemon --> Ollama
+```
+
+#### Version Handshake
+
+Every connection begins with an `initialize` exchange before any other method.
+Major version mismatch → plugin must abort and prompt user to upgrade.
+
+```jsonc
+// Plugin → Daemon
+{ "jsonrpc": "2.0", "id": 1, "method": "initialize",
+  "params": { "protocolVersion": "1.0",
+               "clientInfo": { "name": "mycelium-obsidian", "version": "0.3.0" } } }
+
+// Daemon → Plugin
+{ "jsonrpc": "2.0", "id": 1,
+  "result": { "protocolVersion": "1.0",
+               "serverInfo": { "name": "mycelium", "version": "0.1.0" } } }
 ```
 
 ### Scorer interface
@@ -202,6 +276,49 @@ Current implementation uses multilingual embeddings + cosine similarity. A BM25-
 
 ---
 
+## Daemon Lifecycle
+
+### State Files
+
+| File                        | Windows equivalent                   | Purpose                     |
+| --------------------------- | ------------------------------------ | --------------------------- |
+| `~/.mycelium/mycelium.sock` | `\\.\pipe\mycelium`                  | IPC endpoint                |
+| `~/.mycelium/daemon.pid`    | `%APPDATA%\mycelium\daemon.pid`      | Running PID for dedup check |
+| `~/.mycelium/index.db`      | `%APPDATA%\mycelium\index.db`        | SQLite note metadata        |
+| `~/.mycelium/config.toml`   | `%APPDATA%\mycelium\config.toml`     | User configuration          |
+
+### Startup Flow (Plugin perspective)
+
+```mermaid
+flowchart TD
+  A([Plugin activates]) --> B{socket file exists?}
+  B -- No --> F[Spawn daemon]
+  B -- Yes --> C[Try connect + initialize handshake]
+  C -- Success --> D([Use existing daemon])
+  C -- Fail: stale socket --> E[Delete .sock and .pid files]
+  E --> F
+  F --> G[Wait for socket — max 5 s / 100 ms poll]
+  G --> H[Connect + initialize handshake]
+  H --> D
+```
+
+### Shutdown Flow (Daemon perspective)
+
+```mermaid
+flowchart TD
+  A([SIGTERM / SIGINT]) --> B[Stop accepting new connections]
+  B --> C[Drain in-flight requests — max 10 s]
+  C --> D[Close IPC listener]
+  D --> E[Delete .sock file]
+  E --> F[Delete .pid file]
+  F --> G([Exit 0])
+```
+
+If the daemon crashes without cleanup, the stale socket causes the next `connect` to fail
+(connection refused), which triggers the cleanup path in the startup flow above.
+
+---
+
 ## Privacy
 
 - All processing happens locally on your machine
@@ -214,10 +331,13 @@ Current implementation uses multilingual embeddings + cosine similarity. A BM25-
 ## Roadmap
 
 - [x] Core daemon (Go)
-- [ ] SQLite schema with content hashing
+- [x] SQLite schema with content hashing
+- [x] Ollama embedder (`qwen3-embedding`)
 - [ ] `chromem-go` integration (Vector DB)
 - [ ] Intelligent update logic (Debounce + Hashing)
-- [ ] IPC protocol for "Plugin-as-Writer" (fetch-only mode)
+- [ ] IPC: JSON-RPC 2.0 over UDS / Named Pipe
+- [ ] Daemon lifecycle (PID file, socket, graceful shutdown)
+- [ ] Binary download + SHA-256 verification in plugin
 - [ ] Obsidian plugin (v2 with IPC fetch)
 - [ ] Logseq plugin
 - [ ] Foam plugin
