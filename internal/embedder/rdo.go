@@ -8,3 +8,8 @@ type Model struct {
 	Name string `json:"name"`
 	Size int64  `json:"size"`
 }
+
+type EmbedRDO struct {
+	Model      string      `json:"model"`
+	Embeddings []Embedding `json:"embeddings"`
+}

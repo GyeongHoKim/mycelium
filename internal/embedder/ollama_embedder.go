@@ -2,13 +2,12 @@
 package embedder
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-
-	"github.com/pkg/errors"
 
 	"github.com/gyeonghokim/mycelium/internal/config"
 )
@@ -19,7 +18,15 @@ type OllamaEmbedder struct {
 	model   string
 }
 
-func NewOllamaEmbedder(cfg *config.Config) (*OllamaEmbedder, error) {
+type Option func(*OllamaEmbedder)
+
+func WithClient(client *http.Client) Option {
+	return func(o *OllamaEmbedder) {
+		o.client = client
+	}
+}
+
+func NewOllamaEmbedder(cfg *config.Config, opts ...Option) (*OllamaEmbedder, error) {
 	baseURL, err := url.Parse(cfg.Embedding.Ollama)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrInvalidURL, err)
@@ -28,6 +35,10 @@ func NewOllamaEmbedder(cfg *config.Config) (*OllamaEmbedder, error) {
 		client:  &http.Client{Timeout: defaultTimeout},
 		baseURL: *baseURL,
 		model:   cfg.Embedding.Model,
+	}
+
+	for _, opt := range opts {
+		opt(ollamaEmbedder)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
@@ -94,12 +105,66 @@ func (o *OllamaEmbedder) CheckModel(ctx context.Context) error {
 	return fmt.Errorf("%w: %s", ErrModelNotFound, o.model)
 }
 
-func (o *OllamaEmbedder) Embed(_ context.Context, _ string) ([]float32, error) {
-	// TODO:
-	return nil, errors.New("not implemented")
+func (o *OllamaEmbedder) Embed(ctx context.Context, text string) (Embedding, error) {
+	dto := &EmbedRequestDTO{
+		Model: o.model,
+		Input: text,
+	}
+	u := o.baseURL
+	u.Path = "/api/embed"
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(dto); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result EmbedRDO
+	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Embeddings[0], nil
 }
 
-func (o *OllamaEmbedder) EmbedBatch(_ context.Context, _ []string) ([][]float32, error) {
-	// TODO:
-	return nil, errors.New("not implemented")
+func (o *OllamaEmbedder) EmbedBatch(ctx context.Context, texts []string) ([]Embedding, error) {
+	dto := &EmbedBatchRequestDTO{
+		Model: o.model,
+		Input: texts,
+	}
+	u := o.baseURL
+	u.Path = "/api/embed"
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(dto); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := o.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result EmbedRDO
+	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result.Embeddings, nil
 }
