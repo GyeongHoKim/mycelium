@@ -206,7 +206,7 @@ flowchart TB
       main["mycelium/ (daemon entry point)"]
     end
     subgraph internal["internal/ (private Go packages)"]
-      indexer["indexer/ (vault scan, fsnotify)"]
+      watcher["watcher/ (vault scan, fsnotify)"]
       embedder["embedder/ (Ollama API)"]
       similarity["similarity/ (backed by vector DB)"]
       db["db/ (SQLite, note metadata)"]
